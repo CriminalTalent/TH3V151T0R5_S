@@ -57,8 +57,6 @@ class EnrollCommand
     ]
     @sheet_manager.append('스탯', stat_row)
 
-    puts "[등록] @#{@sender} (#{@name}) 등록 완료"
-
     @mastodon_client.post_status(
       "@#{@sender} 등록이 완료되었습니다.\n" \
       "초기 스탯 포인트 #{INITIAL_STAT_POINTS}포인트가 지급되었습니다.\n" \
