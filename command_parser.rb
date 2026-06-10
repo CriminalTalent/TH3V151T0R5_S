@@ -9,19 +9,20 @@ require_relative 'commands/use_item_command'
 require_relative 'commands/transfer_item_command'
 require_relative 'commands/transfer_credits_command'
 require_relative 'commands/stat_buy_command'
+require_relative 'commands/tarot_command'
+require_relative 'commands/bet_command'
+require_relative 'commands/dice_command'
+require_relative 'commands/coin_command'
+require_relative 'commands/yn_command'
 
 module CommandParser
-  # 간단한 쿨다운 (같은 cmd를 30초 내 중복 응답 방지)
   COOLDOWNS  = {}
   COOLDOWN_S = 30
 
   def self.parse(mastodon_client, sheet_manager, notification)
     content_raw  = notification.dig('status', 'content') || ''
-    account_info = notification['account'] || {}
-    sender       = account_info['acct'] || ''
+    sender       = notification.dig('account', 'acct') || ''
     content      = clean_html(content_raw)
-
-    puts "[PARSER] @#{sender}: #{content}"
 
     message  = nil
     cmd_key  = nil
@@ -30,9 +31,7 @@ module CommandParser
 
     # ── 등록 ──────────────────────────────────────
     when /\[등록\/(.+?)\]/
-      name = $1.strip
-      cmd_key = :enroll
-      EnrollCommand.new(sheet_manager, mastodon_client, sender, name, notification['status']).execute
+      EnrollCommand.new(sheet_manager, mastodon_client, sender, $1.strip, notification['status']).execute
       return
 
     # ── 구매 ──────────────────────────────────────
@@ -47,32 +46,50 @@ module CommandParser
 
     # ── 소지품 ────────────────────────────────────
     when /\[소지품\]/
-      cmd_key = :pouch
       PouchCommand.new(sender, sheet_manager, mastodon_client, notification).execute
       return
 
     # ── 사용 ──────────────────────────────────────
     when /\[사용\/(.+?)\]/
-      item_name = $1.strip
       cmd_key = :use_item
-      message = UseItemCommand.new(sender, item_name, sheet_manager).execute
+      message = UseItemCommand.new(sender, $1.strip, sheet_manager).execute
 
-    # ── 양도 (아이템) ─────────────────────────────
-    when /\[양도\/(.+?)\/@(.+?)\]/
-      item_name = $1.strip
-      target    = $2.strip.split('@').first
-      cmd_key = :transfer_item
-      message = TransferItemCommand.new(sender, target, item_name, sheet_manager).execute
-
-    # ── 양도 (크레딧) ─────────────────────────────
-    when /\[송금\/(\d+)\/@(.+?)\]/
-      amount = $1.to_i
-      target = $2.strip.split('@').first
+    # ── 양도 (크레딧: 숫자/@상대) ─────────────────
+    when /\[양도\/(\d+)\/@(.+?)\]/
       cmd_key = :transfer_credits
-      message = TransferCreditsCommand.new(sender, target, amount, sheet_manager).execute
+      message = TransferCreditsCommand.new(sender, $2.strip.split('@').first, $1.to_i, sheet_manager).execute
+
+    # ── 양도 (아이템: 문자/@상대) ─────────────────
+    when /\[양도\/([^@\/]+?)\/@(.+?)\]/
+      cmd_key = :transfer_item
+      message = TransferItemCommand.new(sender, $2.strip.split('@').first, $1.strip, sheet_manager).execute
+
+    # ── 타로 ──────────────────────────────────────
+    when /\[타로\]/
+      cmd_key = :tarot
+      message = TarotCommand.new(sender, sheet_manager).execute
+
+    # ── 베팅 ──────────────────────────────────────
+    when /\[베팅\/(\d+)\]/
+      cmd_key = :bet
+      message = BetCommand.new(sender, $1.to_i, sheet_manager).execute
+
+    # ── 주사위 ────────────────────────────────────
+    when /\[(\d+)D\]/i, /\[주사위\]/
+      DiceCommand.run(mastodon_client, notification)
+      return
+
+    # ── 동전 ──────────────────────────────────────
+    when /\[동전\]/i
+      CoinCommand.run(mastodon_client, notification)
+      return
+
+    # ── YN ────────────────────────────────────────
+    when /\[YN\]/i
+      YnCommand.run(mastodon_client, notification)
+      return
 
     else
-      puts "[PARSER] 인식되지 않은 명령어"
       return
     end
 
@@ -80,19 +97,18 @@ module CommandParser
 
   rescue => e
     puts "[PARSER 오류] #{e.class}: #{e.message}"
-    puts e.backtrace.first(5).join("\n  ")
+    puts e.backtrace.first(3).join("\n  ")
   end
 
-  # ──────────────────────────────────────────────
   private
 
-  def self.safe_reply(mastodon_client, notification, acct, text, cmd_key: :default, visibility: 'unlisted')
+  def self.safe_reply(mastodon_client, notification, acct, text, cmd_key: :default)
     return if text.nil? || text.to_s.strip.empty?
 
-    status_id = notification.is_a?(Hash) ? notification.dig('status', 'id') : nil
+    status_id = notification.dig('status', 'id')
     return unless status_id
 
-    key = "#{acct}:#{cmd_key}"
+    key  = "#{acct}:#{cmd_key}"
     last = COOLDOWNS[key]
     if last && (Time.now - last) < COOLDOWN_S
       puts "[COOLDOWN] @#{acct} #{cmd_key} 스킵"
@@ -100,19 +116,20 @@ module CommandParser
     end
     COOLDOWNS[key] = Time.now
 
-    mastodon_client.post_status(text, reply_to_id: status_id, visibility: visibility)
+    mastodon_client.post_status(text, reply_to_id: status_id, visibility: 'unlisted')
   rescue => e
     puts "[REPLY 오류] @#{acct}: #{e.message}"
   end
 
   def self.clean_html(html)
     return '' if html.nil?
-    s = html.to_s
-      .gsub(/<br\s*\/?>/i, "\n")
-      .gsub(/<\/p\s*>/i, "\n")
-      .gsub(/<p[^>]*>/i, '')
-      .gsub(/<[^>]*>/, '')
-    CGI.unescapeHTML(s).gsub("\u00A0", ' ').strip
+    CGI.unescapeHTML(
+      html.to_s
+        .gsub(/<br\s*\/?>/i, "\n")
+        .gsub(/<\/p\s*>/i, "\n")
+        .gsub(/<p[^>]*>/i, '')
+        .gsub(/<[^>]*>/, '')
+    ).gsub("\u00A0", ' ').strip
   rescue
     html.to_s
   end
