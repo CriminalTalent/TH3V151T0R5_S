@@ -1,31 +1,15 @@
 # sheet_manager.rb
 # encoding: UTF-8
 require 'google/apis/sheets_v4'
+require 'googleauth'
 
 class SheetManager
-  USERS_SHEET  = '사용자'.freeze
-  ITEMS_SHEET  = '아이템'.freeze
-  STATS_SHEET  = '스탯'.freeze
-
-  # 사용자 시트 컬럼
-  # A: ID / B: 이름 / C: 크레딧 / D: 아이템 / E: 메모
-  # F: 마지막베팅일 / G: 오늘베팅횟수 / H: 마지막타로일
-  # I: 누적툿수 / J: 정산기준툿수 / K: 스탯포인트잔여
-
-  # 스탯 시트 컬럼
-  # A: ID / B: 이름 / C: 건강(기본50) / D: 마법능력(기본10)
-  # E: 인내(기본10) / F: 속도(기본0) / G: 기술(기본0) / H: 행운(기본5)
-
-  STAT_NAMES = {
-    '건강'    => { col: 'C', default: 50 },
-    '마법능력' => { col: 'D', default: 10 },
-    '인내'    => { col: 'E', default: 10 },
-    '속도'    => { col: 'F', default: 0  },
-    '기술'    => { col: 'G', default: 0  },
-    '행운'    => { col: 'H', default: 5  }
-  }.freeze
-
-  STAT_POINT_COST = 10  # 스탯 1포인트 구매 비용(크레딧)
+  USERS_SHEET     = '사용자'.freeze
+  STATS_SHEET     = '스탯'.freeze
+  ITEMS_SHEET     = '아이템'.freeze
+  HOUSE_SHEET     = '기숙사'.freeze
+  PROFESSOR_SHEET = '교수'.freeze
+  AUTO_TOOT_SHEET = '자동툿'.freeze
 
   def initialize(service, sheet_id)
     @service  = service
@@ -37,7 +21,8 @@ class SheetManager
   # ──────────────────────────────────────────────
   def read(sheet, range = 'A:Z')
     @service.get_spreadsheet_values(@sheet_id, "#{sheet}!#{range}").values || []
-  rescue
+  rescue => e
+    puts "[시트 읽기 오류] #{e.message}"
     []
   end
 
@@ -47,6 +32,9 @@ class SheetManager
       @sheet_id, "#{sheet}!#{range}", body,
       value_input_option: 'USER_ENTERED'
     )
+  rescue => e
+    puts "[시트 쓰기 오류] #{e.message}"
+    false
   end
 
   def append(sheet, row)
@@ -55,9 +43,11 @@ class SheetManager
       @sheet_id, "#{sheet}!A:Z", body,
       value_input_option: 'USER_ENTERED'
     )
+  rescue => e
+    puts "[시트 추가 오류] #{e.message}"
+    false
   end
 
-  # 범용 (기존 코드 호환)
   def read_values(range)
     @service.get_spreadsheet_values(@sheet_id, range).values || []
   rescue
@@ -70,25 +60,9 @@ class SheetManager
       @sheet_id, range, body,
       value_input_option: 'USER_ENTERED'
     )
-  end
-
-  # ──────────────────────────────────────────────
-  # 아이템
-  # ──────────────────────────────────────────────
-  # 아이템 시트: A=이름 / B=설명 / C=가격 / D=판매여부 / E=사용가능여부
-  def find_item(item_name)
-    rows = read(ITEMS_SHEET, 'A:E')
-    rows[1..].each do |row|
-      next unless row[0]&.strip == item_name.to_s.strip
-      return {
-        name:     row[0],
-        description: row[1],
-        price:    row[2].to_i,
-        sellable: row[3].to_s.strip.upcase == 'TRUE' || row[3] == true,
-        usable:   row[4].to_s.strip.upcase == 'TRUE' || row[4] == true
-      }
-    end
-    nil
+  rescue => e
+    puts "[시트 업데이트 오류] #{e.message}"
+    false
   end
 
   # ──────────────────────────────────────────────
@@ -96,31 +70,52 @@ class SheetManager
   # ──────────────────────────────────────────────
   def find_user(acct)
     acct = acct.to_s.gsub('@', '').strip
-    rows = read(USERS_SHEET, 'A:K')
+    rows = read(USERS_SHEET, 'A:M')
     rows[1..].each_with_index do |row, i|
       next unless row[0]&.gsub('@', '')&.strip == acct
-      return build_user(row, i + 2)
+      return {
+        row_num:         i + 2,
+        id:              row[0].to_s.strip,
+        name:            row[1].to_s.strip,
+        credits:         (row[2] || 0).to_i,
+        items:           row[3].to_s,
+        memo:            row[4].to_s,
+        last_bet_date:   row[5].to_s,
+        today_bet_count: (row[6] || 0).to_i,
+        last_tarot_date: row[7].to_s,
+        toot_count:      (row[8] || 0).to_i,
+        toot_baseline:   (row[9] || 0).to_i,
+        stat_points:     (row[10] || 0).to_i,
+        attendance_date: row[11].to_s.strip,
+        homework_date:   row[12].to_s.strip,
+        house:           find_user_house(acct)
+      }
     end
+    nil
+  rescue => e
+    puts "[find_user 오류] #{e.message}"
     nil
   end
 
   def update_user(acct, attrs)
     acct = acct.to_s.gsub('@', '').strip
-    rows = read(USERS_SHEET, 'A:K')
+    col_map = {
+      credits:         'C',
+      items:           'D',
+      memo:            'E',
+      last_bet_date:   'F',
+      today_bet_count: 'G',
+      last_tarot_date: 'H',
+      toot_count:      'I',
+      toot_baseline:   'J',
+      stat_points:     'K',
+      attendance_date: 'L',
+      homework_date:   'M'
+    }
+    rows = read(USERS_SHEET, 'A:M')
     rows[1..].each_with_index do |row, i|
       next unless row[0]&.gsub('@', '')&.strip == acct
       row_num = i + 2
-      col_map = {
-        credits:        'C',
-        items:          'D',
-        memo:           'E',
-        last_bet_date:  'F',
-        today_bet_count:'G',
-        last_tarot_date:'H',
-        toot_count:     'I',
-        toot_baseline:  'J',
-        stat_points:    'K'
-      }
       attrs.each do |key, val|
         col = col_map[key]
         next unless col
@@ -139,100 +134,147 @@ class SheetManager
     rows = read(STATS_SHEET, 'A:H')
     rows[1..].each_with_index do |row, i|
       next unless row[0]&.gsub('@', '')&.strip == acct
-      return build_stats(row, i + 2)
+      return {
+        row_num:   i + 2,
+        id:        row[0].to_s.strip,
+        name:      row[1].to_s.strip,
+        health:    (row[2] || 50).to_i,
+        magic:     (row[3] || 10).to_i,
+        endurance: (row[4] || 10).to_i,
+        speed:     (row[5] || 0).to_i,
+        skill:     (row[6] || 0).to_i,
+        luck:      (row[7] || 5).to_i
+      }
     end
     nil
   end
 
   def update_stat(acct, stat_name, new_val)
     acct = acct.to_s.gsub('@', '').strip
-    info = STAT_NAMES[stat_name]
-    return false unless info
+    col_map = {
+      '건강'    => 'C', '마법능력' => 'D', '인내' => 'E',
+      '속도'    => 'F', '기술'     => 'G', '행운' => 'H'
+    }
+    col = col_map[stat_name]
+    return false unless col
     rows = read(STATS_SHEET, 'A:H')
     rows[1..].each_with_index do |row, i|
       next unless row[0]&.gsub('@', '')&.strip == acct
-      row_num = i + 2
-      write(STATS_SHEET, "#{info[:col]}#{row_num}", [[new_val]])
+      write(STATS_SHEET, "#{col}#{i + 2}", [[new_val]])
       return true
     end
     false
   end
 
   # ──────────────────────────────────────────────
-  # 툿 카운트 정산 (자정 스케줄러 호출)
+  # 아이템
   # ──────────────────────────────────────────────
-  # toot_count(I열): 마스토돈 API로 갱신한 현재 누적 툿 수
-  # toot_baseline(J열): 마지막 정산 시점의 누적 툿 수
-  # 차이 // 100 * 15 크레딧 지급 후 baseline 갱신
+  def find_item(item_name)
+    rows = read(ITEMS_SHEET, 'A:F')
+    rows[1..].each do |row|
+      next unless row[0]&.strip == item_name.to_s.strip
+      return {
+        name:        row[0],
+        description: row[1],
+        price:       row[2].to_i,
+        sellable:    row[3].to_s.strip.upcase == 'TRUE' || row[3] == true,
+        usable:      row[4].to_s.strip.upcase == 'TRUE' || row[4] == true,
+        use_message: row[5].to_s.strip
+      }
+    end
+    nil
+  end
+
+  # ──────────────────────────────────────────────
+  # 기숙사
+  # ──────────────────────────────────────────────
+  def find_user_house(acct)
+    acct = acct.to_s.gsub('@', '').strip
+    rows = read(STATS_SHEET, 'A:Z')
+    header = rows[0] || []
+    house_col = header.index { |h| h.to_s.strip == '기숙사' }
+    return '' unless house_col
+    rows[1..].each do |row|
+      next unless row[0]&.gsub('@', '')&.strip == acct
+      return row[house_col].to_s.strip
+    end
+    ''
+  rescue
+    ''
+  end
+
+  def get_house_credits(house_name)
+    rows = read(HOUSE_SHEET, 'A:B')
+    rows[1..].each do |row|
+      next unless row[0]&.strip == house_name.to_s.strip
+      return (row[1] || 0).to_i
+    end
+    0
+  end
+
+  def add_house_credits(house_name, amount)
+    rows = read(HOUSE_SHEET, 'A:B')
+    rows[1..].each_with_index do |row, i|
+      next unless row[0]&.strip == house_name.to_s.strip
+      current = (row[1] || 0).to_i
+      write(HOUSE_SHEET, "B#{i + 2}", [[current + amount]])
+      return true
+    end
+    false
+  end
+
+  # ──────────────────────────────────────────────
+  # 교수 시트 ON/OFF
+  # ──────────────────────────────────────────────
+  def auto_push_enabled?(key:)
+    rows = read(PROFESSOR_SHEET, 'A:Z')
+    return false if rows.empty?
+    header = rows[0] || []
+    values = rows[1] || []
+    idx = header.index { |h| h.to_s.strip == key.to_s.strip }
+    return false unless idx
+    val = values[idx]
+    val == true || val.to_s.strip.upcase == 'TRUE'
+  rescue => e
+    puts "[auto_push_enabled? 오류] #{e.message}"
+    false
+  end
+
+  # ──────────────────────────────────────────────
+  # 자동툿 시트
+  # A=ON/OFF(체크박스) / B=시간(HH:MM) / C=내용
+  # ──────────────────────────────────────────────
+  def load_auto_toots
+    rows = read(AUTO_TOOT_SHEET, 'A:C')
+    result = []
+    rows[1..].each do |row|
+      next if row.nil? || row[2].nil? || row[2].to_s.strip.empty?
+      enabled = row[0] == true || row[0].to_s.strip.upcase == 'TRUE'
+      time    = row[1].to_s.strip
+      content = row[2].to_s.strip
+      next unless enabled && !time.empty?
+      result << { time: time, content: content }
+    end
+    result
+  rescue => e
+    puts "[load_auto_toots 오류] #{e.message}"
+    []
+  end
+
+  # ──────────────────────────────────────────────
+  # 툿 카운트 정산
+  # ──────────────────────────────────────────────
   def settle_toot_credits(acct, current_toot_count)
     user = find_user(acct)
     return unless user
-
     baseline = user[:toot_baseline]
     diff     = current_toot_count - baseline
     return if diff < 100
-
-    earned_units = diff / 100
-    earned       = earned_units * 15
-    new_baseline = baseline + (earned_units * 100)
-    new_credits  = user[:credits] + earned
-
+    units        = diff / 100
+    earned       = units * 15
+    new_baseline = baseline + (units * 100)
     update_user(acct, {
-      credits:       new_credits,
+      credits:       user[:credits] + earned,
       toot_count:    current_toot_count,
       toot_baseline: new_baseline
     })
-
-    puts "[툿정산] @#{acct}: +#{earned}크레딧 (#{diff}툿, #{earned_units}단위)"
-    { earned: earned, units: earned_units }
-  end
-
-  # toot_count만 갱신 (정산 없이 기록만)
-  def update_toot_count(acct, count)
-    update_user(acct, { toot_count: count })
-  end
-
-  # 모든 사용자 목록 반환
-  def all_users
-    rows = read(USERS_SHEET, 'A:K')
-    result = []
-    rows[1..].each_with_index do |row, i|
-      next if row.nil? || row[0].nil?
-      result << build_user(row, i + 2)
-    end
-    result
-  end
-
-  private
-
-  def build_user(row, row_num)
-    {
-      row_num:          row_num,
-      id:               row[0].to_s.strip,
-      name:             row[1].to_s.strip,
-      credits:          (row[2] || 0).to_i,
-      items:            row[3].to_s,
-      memo:             row[4].to_s,
-      last_bet_date:    row[5].to_s,
-      today_bet_count:  (row[6] || 0).to_i,
-      last_tarot_date:  row[7].to_s,
-      toot_count:       (row[8] || 0).to_i,
-      toot_baseline:    (row[9] || 0).to_i,
-      stat_points:      (row[10] || 0).to_i
-    }
-  end
-
-  def build_stats(row, row_num)
-    {
-      row_num:      row_num,
-      id:           row[0].to_s.strip,
-      name:         row[1].to_s.strip,
-      health:       (row[2] || 50).to_i,   # 건강
-      magic:        (row[3] || 10).to_i,   # 마법능력
-      endurance:    (row[4] || 10).to_i,   # 인내
-      speed:        (row[5] || 0).to_i,    # 속도
-      skill:        (row[6] || 0).to_i,    # 기술
-      luck:         (row[7] || 5).to_i     # 행운
-    }
-  end
-end
