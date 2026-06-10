@@ -1,38 +1,33 @@
-# ============================================
-# commands/transfer_item_command.rb (멘션 추가 버전)
-# ============================================
+# commands/transfer_item_command.rb
+# encoding: UTF-8
+
 class TransferItemCommand
-  def initialize(sender, receiver, item_name, sheet_manager)
-    @sender = sender.gsub('@', '')
-    @receiver = receiver.gsub('@', '')
-    @item_name = item_name.strip
+  def initialize(sender, target, item_name, sheet_manager)
+    @sender        = sender.to_s.gsub('@', '')
+    @target        = target.to_s.gsub('@', '')
+    @item_name     = item_name.to_s.strip
     @sheet_manager = sheet_manager
   end
 
   def execute
-    sender_user = @sheet_manager.find_user(@sender)
-    unless sender_user
-      return "@#{@sender} 어머, 손님이 누구시더라? 입학부터 하고 오세요~"
-    end
+    sender = @sheet_manager.find_user(@sender)
+    return "@#{@sender} 등록되지 않은 계정입니다." unless sender
 
-    receiver_user = @sheet_manager.find_user(@receiver)
-    unless receiver_user
-      return "@#{@sender} 어머나, @#{@receiver}님이 학교에 없는 것 같은데요?"
-    end
+    target = @sheet_manager.find_user(@target)
+    return "@#{@sender} @#{@target} 계정을 찾을 수 없습니다." unless target
 
-    inventory = sender_user[:items].to_s.split(",").map(&:strip)
-    unless inventory.include?(@item_name)
-      return "@#{@sender} 어? #{@item_name}은(는) 안 가지고 계신 것 같은데요?"
-    end
+    sender_items = sender[:items].split(',').map(&:strip).reject(&:empty?)
+    idx = sender_items.index(@item_name)
+    return "@#{@sender} 소지하고 있지 않은 아이템입니다: #{@item_name}" unless idx
 
-    # 양도 처리
-    inventory.delete(@item_name)
-    receiver_inventory = receiver_user[:items].to_s.split(",").map(&:strip)
-    receiver_inventory << @item_name
+    sender_items.delete_at(idx)
+    target_items = target[:items].split(',').map(&:strip).reject(&:empty?)
+    target_items << @item_name
 
-    @sheet_manager.update_user(@sender, { items: inventory.join(",") })
-    @sheet_manager.update_user(@receiver, { items: receiver_inventory.join(",") })
+    @sheet_manager.update_user(@sender, { items: sender_items.join(',') })
+    @sheet_manager.update_user(@target, { items: target_items.join(',') })
 
-    return "@#{@sender} #{@item_name} 잘 전달했어요! @#{@receiver}님한테 줬어요~"
+    puts "[양도] @#{@sender} → @#{@target} #{@item_name}"
+    "@#{@sender} #{@item_name}을(를) @#{@target}에게 양도했습니다."
   end
 end
