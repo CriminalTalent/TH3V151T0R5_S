@@ -15,9 +15,10 @@ class EnrollCommand
 
   def execute
     if @sheet_manager.find_user(@sender)
-      @mastodon_client.reply(
+      @mastodon_client.post_status(
         "@#{@sender} 이미 등록된 계정입니다.",
-        @status['id']
+        reply_to_id: @status['id'],
+        visibility: 'unlisted'
       )
       return
     end
@@ -58,17 +59,19 @@ class EnrollCommand
 
     puts "[등록] @#{@sender} (#{@name}) 등록 완료"
 
-    @mastodon_client.reply(
+    @mastodon_client.post_status(
       "@#{@sender} 등록이 완료되었습니다.\n" \
       "초기 스탯 포인트 #{INITIAL_STAT_POINTS}포인트가 지급되었습니다.\n" \
       "[소지품] 명령어로 현재 상태를 확인할 수 있습니다.",
-      @status['id']
+      reply_to_id: @status['id'],
+      visibility: 'unlisted'
     )
   rescue => e
     puts "[에러] 등록 처리 실패: #{e.message}"
-    @mastodon_client.reply(
+    @mastodon_client.post_status(
       "@#{@sender} 등록 처리 중 오류가 발생했습니다.",
-      @status['id']
+      reply_to_id: @status['id'],
+      visibility: 'unlisted'
     )
   end
 end
