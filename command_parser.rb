@@ -14,77 +14,80 @@ require_relative 'commands/bet_command'
 require_relative 'commands/dice_command'
 require_relative 'commands/coin_command'
 require_relative 'commands/yn_command'
+require_relative 'commands/craft_command'
+require_relative 'commands/hideout_command'
+require_relative 'commands/material_draw_command'
 
 module CommandParser
   COOLDOWNS  = {}
   COOLDOWN_S = 30
 
   def self.parse(mastodon_client, sheet_manager, notification)
-    content_raw  = notification.dig('status', 'content') || ''
-    sender       = notification.dig('account', 'acct') || ''
-    content      = clean_html(content_raw)
+    content_raw = notification.dig('status', 'content') || ''
+    sender      = notification.dig('account', 'acct') || ''
+    content     = clean_html(content_raw)
 
-    message  = nil
-    cmd_key  = nil
+    message = nil
+    cmd_key = nil
 
     case content
 
-    # ── 등록 ──────────────────────────────────────
     when /\[등록\/(.+?)\]/
       EnrollCommand.new(sheet_manager, mastodon_client, sender, $1.strip, notification['status']).execute
       return
 
-    # ── 구매 ──────────────────────────────────────
     when /\[구매\/(.+?)\]/
       cmd_key = :buy
       message = BuyCommand.new(content, sender, sheet_manager).execute
 
-    # ── 스탯 구매 ─────────────────────────────────
     when /\[스탯구매\/(.+?)\]/
       cmd_key = :stat_buy
       message = StatBuyCommand.new(content, sender, sheet_manager).execute
 
-    # ── 소지품 ────────────────────────────────────
     when /\[소지품\]/
       PouchCommand.new(sender, sheet_manager, mastodon_client, notification).execute
       return
 
-    # ── 사용 ──────────────────────────────────────
     when /\[사용\/(.+?)\]/
       cmd_key = :use_item
       message = UseItemCommand.new(sender, $1.strip, sheet_manager).execute
 
-    # ── 양도 (크레딧: 숫자/@상대) ─────────────────
     when /\[양도\/(\d+)\/@(.+?)\]/
       cmd_key = :transfer_credits
       message = TransferCreditsCommand.new(sender, $2.strip.split('@').first, $1.to_i, sheet_manager).execute
 
-    # ── 양도 (아이템: 문자/@상대) ─────────────────
     when /\[양도\/([^@\/]+?)\/@(.+?)\]/
       cmd_key = :transfer_item
       message = TransferItemCommand.new(sender, $2.strip.split('@').first, $1.strip, sheet_manager).execute
 
-    # ── 타로 ──────────────────────────────────────
+    when /\[은신처꾸미기\]/
+      cmd_key = :hideout
+      message = HideoutCommand.new(sender, sheet_manager).execute
+
+    when /\[재료뽑기\]/
+      cmd_key = :material_draw
+      message = MaterialDrawCommand.new(sender, sheet_manager).execute
+
+    when /\[조합\/(.+?)\/(.+?)\/(.+?)\]/
+      cmd_key = :craft
+      message = CraftCommand.new(content, sender, sheet_manager).execute
+
     when /\[타로\]/
       cmd_key = :tarot
       message = TarotCommand.new(sender, sheet_manager).execute
 
-    # ── 베팅 ──────────────────────────────────────
     when /\[베팅\/(\d+)\]/
       cmd_key = :bet
       message = BetCommand.new(sender, $1.to_i, sheet_manager).execute
 
-    # ── 주사위 ────────────────────────────────────
     when /\[(\d+)D\]/i, /\[주사위\]/
       DiceCommand.run(mastodon_client, notification)
       return
 
-    # ── 동전 ──────────────────────────────────────
     when /\[동전\]/i
       CoinCommand.run(mastodon_client, notification)
       return
 
-    # ── YN ────────────────────────────────────────
     when /\[YN\]/i
       YnCommand.run(mastodon_client, notification)
       return
@@ -104,7 +107,6 @@ module CommandParser
 
   def self.safe_reply(mastodon_client, notification, acct, text, cmd_key: :default)
     return if text.nil? || text.to_s.strip.empty?
-
     status_id = notification.dig('status', 'id')
     return unless status_id
 

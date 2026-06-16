@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
 # encoding: UTF-8
 
-require 'dotenv/load'
+require 'dotenv'
+Dotenv.load('/root/TH3V151T0R5_S/.env')
 require 'google/apis/sheets_v4'
 require 'googleauth'
 
@@ -9,7 +10,7 @@ require_relative 'mastodon_client'
 require_relative 'sheet_manager'
 require_relative 'command_parser'
 
-LAST_FILE = 'last_mention_id.txt'
+LAST_FILE = '/root/TH3V151T0R5_S/last_mention_id.txt'
 BASE_URL  = ENV['MASTODON_BASE_URL']
 TOKEN     = ENV['MASTODON_TOKEN']
 SHEET_ID  = ENV['GOOGLE_SHEET_ID']

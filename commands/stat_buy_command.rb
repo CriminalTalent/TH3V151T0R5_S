@@ -1,7 +1,5 @@
 # commands/stat_buy_command.rb
 # encoding: UTF-8
-# [스탯구매/스탯명] - 스탯 포인트 1포인트 소모해 해당 스탯 1 증가
-# 스탯 포인트는 사용자 시트 K열(stat_points)에서 차감
 
 class StatBuyCommand
   STAT_ALIASES = {
@@ -19,7 +17,14 @@ class StatBuyCommand
     '크리티컬' => '행운'
   }.freeze
 
-  STAT_COL = SheetManager::STAT_NAMES  # sheet_manager.rb의 STAT_NAMES 참조
+  STAT_COL_MAP = {
+    '건강'    => 'C',
+    '마법능력' => 'D',
+    '인내'    => 'E',
+    '속도'    => 'F',
+    '기술'    => 'G',
+    '행운'    => 'H'
+  }.freeze
 
   def initialize(content, student_id, sheet_manager)
     @student_id    = student_id.to_s.gsub('@', '')
@@ -34,7 +39,7 @@ class StatBuyCommand
     stat_name = STAT_ALIASES[@input_stat]
     return "@#{@student_id} #{@input_stat}은(는) 올바른 스탯명이 아닙니다.\n사용 가능: 건강, 마법능력, 인내, 속도, 기술, 행운" unless stat_name
 
-    user  = @sheet_manager.find_user(@student_id)
+    user = @sheet_manager.find_user(@student_id)
     return "@#{@student_id} 등록되지 않은 계정입니다." unless user
 
     if user[:stat_points] < 1
@@ -53,15 +58,14 @@ class StatBuyCommand
       '행운'    => :luck
     }
 
-    stat_key  = stat_key_map[stat_name]
-    old_val   = stats[stat_key]
-    new_val   = old_val + 1
-    new_pts   = user[:stat_points] - 1
+    stat_key = stat_key_map[stat_name]
+    old_val  = stats[stat_key]
+    new_val  = old_val + 1
+    new_pts  = user[:stat_points] - 1
 
     @sheet_manager.update_stat(@student_id, stat_name, new_val)
     @sheet_manager.update_user(@student_id, { stat_points: new_pts })
 
-    puts "[스탯구매] @#{@student_id} #{stat_name} #{old_val} → #{new_val}, 잔여pt: #{new_pts}"
     "@#{@student_id} #{stat_name} 스탯이 #{old_val} → #{new_val}이 되었습니다.\n잔여 스탯 포인트: #{new_pts}pt"
   end
 end

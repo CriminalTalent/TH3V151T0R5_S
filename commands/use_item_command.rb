@@ -24,7 +24,15 @@ class UseItemCommand
     items.delete_at(idx)
     @sheet_manager.update_user(@sender, { items: items.join(',') })
 
-    puts "[사용] @#{@sender} #{@item_name}"
-    "@#{@sender} #{@item_name}을(를) 사용했습니다."
+    use_message = item&.dig(:use_message).to_s.strip
+    result = if use_message.include?('/')
+               use_message.split('/').map(&:strip).reject(&:empty?).sample
+             elsif !use_message.empty?
+               use_message
+             else
+               "#{@item_name}을(를) 사용했습니다."
+             end
+
+    "@#{@sender} #{result}"
   end
 end
