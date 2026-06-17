@@ -24,7 +24,7 @@ class DiceCommand
 
     result = rand(1..sides)
     mastodon_client.post_status(
-      "@#{sender} #{sides}면 주사위: #{result}",
+      "@#{sender} #{result}",
       reply_to_id: status_id, visibility: 'unlisted'
     )
   rescue => e
