@@ -1,6 +1,7 @@
 # command_parser.rb
 # encoding: UTF-8
 require 'cgi'
+require 'digest'
 
 require_relative 'commands/enroll_command'
 require_relative 'commands/buy_command'
@@ -29,62 +30,50 @@ module CommandParser
 
     case content
 
-    # ── 등록 ──────────────────────────────────────
     when /\[등록\/(.+?)\]/
       EnrollCommand.new(sheet_manager, mastodon_client, sender, $1.strip, notification['status']).execute
       return
 
-    # ── 구매 ──────────────────────────────────────
     when /\[구매\/(.+?)\]/
-      cmd_key = :buy
+      cmd_key = "buy:#{$1.strip}"
       message = BuyCommand.new(content, sender, sheet_manager).execute
 
-    # ── 스탯 구매 ─────────────────────────────────
     when /\[스탯구매\/(.+?)\]/
-      cmd_key = :stat_buy
+      cmd_key = "stat_buy:#{$1.strip}"
       message = StatBuyCommand.new(content, sender, sheet_manager).execute
 
-    # ── 소지품 ────────────────────────────────────
     when /\[소지품\]/
       PouchCommand.new(sender, sheet_manager, mastodon_client, notification).execute
       return
 
-    # ── 사용 ──────────────────────────────────────
     when /\[사용\/(.+?)\]/
-      cmd_key = :use_item
+      cmd_key = "use_item:#{$1.strip}"
       message = UseItemCommand.new(sender, $1.strip, sheet_manager).execute
 
-    # ── 양도 (크레딧: 숫자/@상대) ─────────────────
     when /\[양도\/(\d+)\/@(.+?)\]/
-      cmd_key = :transfer_credits
+      cmd_key = "transfer_credits:#{$1}:#{$2.strip}"
       message = TransferCreditsCommand.new(sender, $2.strip.split('@').first, $1.to_i, sheet_manager).execute
 
-    # ── 양도 (아이템: 문자/@상대) ─────────────────
     when /\[양도\/([^@\/]+?)\/@(.+?)\]/
-      cmd_key = :transfer_item
+      cmd_key = "transfer_item:#{$1.strip}:#{$2.strip}"
       message = TransferItemCommand.new(sender, $2.strip.split('@').first, $1.strip, sheet_manager).execute
 
-    # ── 타로 ──────────────────────────────────────
     when /\[타로\]/
       cmd_key = :tarot
       message = TarotCommand.new(sender, sheet_manager).execute
 
-    # ── 베팅 ──────────────────────────────────────
     when /\[베팅\/(\d+)\]/
-      cmd_key = :bet
+      cmd_key = "bet:#{$1}"
       message = BetCommand.new(sender, $1.to_i, sheet_manager).execute
 
-    # ── 주사위 ────────────────────────────────────
     when /\[(\d+)D\]/i, /\[주사위\]/
       DiceCommand.run(mastodon_client, notification)
       return
 
-    # ── 동전 ──────────────────────────────────────
     when /\[동전\]/i
       CoinCommand.run(mastodon_client, notification)
       return
 
-    # ── YN ────────────────────────────────────────
     when /\[YN\]/i
       YnCommand.run(mastodon_client, notification)
       return
@@ -108,7 +97,9 @@ module CommandParser
     status_id = notification.dig('status', 'id')
     return unless status_id
 
-    key  = "#{acct}:#{cmd_key}"
+    # 내용 해시를 키에 포함 → 동일 커맨드라도 결과가 다르면 별도 처리
+    content_hash = Digest::MD5.hexdigest(text.to_s)[0, 8]
+    key  = "#{acct}:#{cmd_key}:#{content_hash}"
     last = COOLDOWNS[key]
     if last && (Time.now - last) < COOLDOWN_S
       puts "[COOLDOWN] @#{acct} #{cmd_key} 스킵"
