@@ -8,7 +8,7 @@ class CoinCommand
     result    = ['앞면', '뒷면'].sample
 
     mastodon_client.post_status(
-      "@#{sender} 동전 던지기: #{result}",
+      "@#{sender} #{result}",
       reply_to_id: status_id, visibility: 'unlisted'
     )
   rescue => e
