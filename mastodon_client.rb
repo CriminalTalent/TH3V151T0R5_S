@@ -11,6 +11,8 @@ require 'openssl'
 require 'securerandom'
 
 class MastodonClient
+  MAX_CHARS = 1000
+
   def initialize(base_url:, token:)
     @base_url = base_url.to_s.sub(%r{/\z}, '')
     @token    = token.to_s
@@ -32,9 +34,6 @@ class MastodonClient
     str.to_s
   end
 
-  # -----------------------------
-  # Low-level request helper
-  # -----------------------------
   def request(method:, path:, params: {}, form: nil, headers: {})
     uri = URI.join(@base_url, path)
 
@@ -69,11 +68,6 @@ class MastodonClient
     [nil, {}]
   end
 
-  # -----------------------------
-  # Notifications (mentions poll)
-  # Mastodon API: GET /api/v1/notifications
-  # params: limit, since_id, max_id, min_id, types[], exclude_types[]
-  # -----------------------------
   def notifications(limit: 30, since_id: nil, max_id: nil, min_id: nil, types: nil, exclude_types: nil)
     params = {}
     params[:limit]    = limit.to_i if limit
@@ -81,7 +75,6 @@ class MastodonClient
     params[:max_id]   = max_id.to_s if max_id
     params[:min_id]   = min_id.to_s if min_id
 
-    # 배열 파라미터는 mastodon이 types[]=mention 형태를 받음
     if types && types.respond_to?(:each)
       i = 0
       types.each do |t|
@@ -103,9 +96,6 @@ class MastodonClient
     body.is_a?(Array) ? body : []
   end
 
-  # -----------------------------
-  # Media upload helpers
-  # -----------------------------
   def content_type_for(path)
     ext = File.extname(path.to_s).downcase
     return "image/png"  if ext == ".png"
@@ -114,17 +104,14 @@ class MastodonClient
     "image/jpeg"
   end
 
-  # Google Drive 공유 링크를 "직접 다운로드" URL로 변환
   def normalize_download_url(url)
     u = url.to_s.strip
 
-    # 1) .../file/d/<ID>/view?usp=sharing 형태
     if u =~ %r{/file/d/([^/]+)}
       file_id = Regexp.last_match(1)
       return "https://drive.google.com/uc?export=download&id=#{file_id}"
     end
 
-    # 2) ...open?id=<ID> 형태
     if u.include?("drive.google.com") && u.include?("id=")
       begin
         uri = URI(u)
@@ -136,7 +123,6 @@ class MastodonClient
       end
     end
 
-    # 3) 이미 uc?export=download&id= 형태면 그대로
     u
   end
 
@@ -144,7 +130,7 @@ class MastodonClient
     download_url = normalize_download_url(image_url)
 
     ext = File.extname(download_url)
-    ext = ".png" if ext.nil? || ext.empty? # 사용자가 "전부 png"라고 했으니 기본 png
+    ext = ".png" if ext.nil? || ext.empty?
 
     Tempfile.create(['doll', ext]) do |file|
       file.binmode
@@ -168,7 +154,6 @@ class MastodonClient
     file_bin = File.binread(path.to_s)
     ctype    = content_type_for(path)
 
-    # multipart body (바이너리 안전)
     body = +""
     body << "--#{boundary}\r\n"
     body << "Content-Disposition: form-data; name=\"file\"; filename=\"#{filename}\"\r\n"
@@ -203,33 +188,46 @@ class MastodonClient
     nil
   end
 
-  # -----------------------------
-  # Posting
-  # -----------------------------
+  # 1000자 초과 시 스레드로 분할 전송
   def post_status(text, reply_to_id: nil, visibility: "public", media_ids: [])
     return if Time.now < @post_block_until
 
-    form = { status: safe_utf8(text), visibility: visibility }
-    form[:in_reply_to_id] = reply_to_id if reply_to_id
+    chunks = split_text(safe_utf8(text))
+    last_res = nil
+    current_reply_id = reply_to_id
 
-    Array(media_ids).each_with_index do |id, i|
-      form["media_ids[#{i}]"] = id
+    chunks.each do |chunk|
+      form = { status: chunk, visibility: visibility }
+      form[:in_reply_to_id] = current_reply_id if current_reply_id
+
+      Array(media_ids).each_with_index do |id, i|
+        form["media_ids[#{i}]"] = id
+      end
+
+      res, body = request(method: :post, path: "/api/v1/statuses", form: form)
+
+      if res && res.code.to_s == '429'
+        reset = res['x-ratelimit-reset']
+        @post_block_until =
+          begin
+            reset ? Time.parse(reset) : (Time.now + 600)
+          rescue
+            Time.now + 600
+          end
+        puts "[POST] rate limit → #{@post_block_until} 까지 중단"
+        break
+      end
+
+      # 다음 청크는 이 툿의 답글로
+      if body.is_a?(Hash) && body['id']
+        current_reply_id = body['id']
+      end
+
+      last_res = res
+      sleep 1 if chunks.size > 1
     end
 
-    res, _ = request(method: :post, path: "/api/v1/statuses", form: form)
-
-    if res && res.code.to_s == '429'
-      reset = res['x-ratelimit-reset']
-      @post_block_until =
-        begin
-          reset ? Time.parse(reset) : (Time.now + 600)
-        rescue
-          Time.now + 600
-        end
-      puts "[POST] rate limit → #{@post_block_until} 까지 중단"
-    end
-
-    res
+    last_res
   end
 
   def reply(status, text, visibility: "unlisted", media_ids: [])
@@ -239,5 +237,25 @@ class MastodonClient
       visibility: visibility,
       media_ids: media_ids
     )
+  end
+
+  private
+
+  def split_text(text)
+    return [text] if text.length <= MAX_CHARS
+
+    chunks = []
+    remaining = text.dup
+
+    while remaining.length > MAX_CHARS
+      slice = remaining[0, MAX_CHARS]
+      # 줄바꿈 기준으로 자르기
+      cut = slice.rindex("\n") || MAX_CHARS
+      chunks << remaining[0, cut].rstrip
+      remaining = remaining[cut..].lstrip
+    end
+
+    chunks << remaining unless remaining.empty?
+    chunks
   end
 end
