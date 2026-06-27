@@ -14,15 +14,21 @@ require_relative 'commands/bet_command'
 require_relative 'commands/dice_command'
 require_relative 'commands/coin_command'
 require_relative 'commands/yn_command'
+require_relative 'commands/material_command'
+require_relative 'commands/homestead_command'
+require_relative 'commands/recipe_command'
+
 module CommandParser
   COOLDOWNS  = {}
   COOLDOWN_S = 30
+
   def self.parse(mastodon_client, sheet_manager, notification)
     content_raw  = notification.dig('status', 'content') || ''
     sender       = notification.dig('account', 'acct') || ''
     content      = clean_html(content_raw)
     message  = nil
     cmd_key  = nil
+
     case content
     when /\[등록\/(.+?)\]/
       EnrollCommand.new(sheet_manager, mastodon_client, sender, $1.strip, notification['status']).execute
@@ -51,6 +57,15 @@ module CommandParser
     when /\[베팅\/(\d+)\]/
       cmd_key = "bet:#{$1}"
       message = BetCommand.new(sender, $1.to_i, sheet_manager).execute
+    when /\[재료뽑기\]/
+      cmd_key = :material
+      message = MaterialCommand.new(content, sender, sheet_manager).execute
+    when /\[은신처꾸미기\]/
+      cmd_key = :homestead
+      message = HomesteadCommand.new(content, sender, sheet_manager).execute
+    when /\[조합\/(.+?)\/(.+?)\/(.+?)\]/
+      cmd_key = "recipe:#{$1.strip}:#{$2.strip}:#{$3.strip}"
+      message = RecipeCommand.new(content, sender, sheet_manager).execute
     when /\[(\d+)D\]/i, /\[주사위\]/
       DiceCommand.run(mastodon_client, notification)
       return
@@ -63,30 +78,39 @@ module CommandParser
     else
       return
     end
+
     safe_reply(mastodon_client, notification, sender, message, cmd_key: cmd_key) if message
   rescue => e
     puts "[PARSER 오류] #{e.class}: #{e.message}"
     puts e.backtrace.first(3).join("\n  ")
   end
+
   private
+
   def self.safe_reply(mastodon_client, notification, acct, text, cmd_key: :default)
     return if text.nil? || text.to_s.strip.empty?
+
     status_id = notification.dig('status', 'id')
     return unless status_id
+
     content_hash = Digest::MD5.hexdigest(text.to_s)[0, 8]
     key  = "#{acct}:#{cmd_key}:#{content_hash}"
     last = COOLDOWNS[key]
+
     if last && (Time.now - last) < COOLDOWN_S
       puts "[COOLDOWN] @#{acct} #{cmd_key} 스킵"
       return
     end
+
     COOLDOWNS[key] = Time.now
     mastodon_client.post_status(text, reply_to_id: status_id, visibility: 'unlisted')
   rescue => e
     puts "[REPLY 오류] @#{acct}: #{e.message}"
   end
+
   def self.clean_html(html)
     return '' if html.nil?
+
     CGI.unescapeHTML(
       html.to_s
         .gsub(/<br\s*\/?>/i, "\n")
