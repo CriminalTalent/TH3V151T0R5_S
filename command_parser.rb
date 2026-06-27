@@ -14,9 +14,6 @@ require_relative 'commands/bet_command'
 require_relative 'commands/dice_command'
 require_relative 'commands/coin_command'
 require_relative 'commands/yn_command'
-require_relative 'commands/hideout_command'
-require_relative 'commands/combination_command'
-require_relative 'commands/material_command'
 module CommandParser
   COOLDOWNS  = {}
   COOLDOWN_S = 30
@@ -54,15 +51,6 @@ module CommandParser
     when /\[베팅\/(\d+)\]/
       cmd_key = "bet:#{$1}"
       message = BetCommand.new(sender, $1.to_i, sheet_manager).execute
-    when /\[은신처꾸미기\]/
-      HideoutCommand.new(sender, sheet_manager, mastodon_client, notification).execute
-      return
-    when /\[조합\/(.+?)\/(.+?)\/(.+?)\]/
-      cmd_key = "combination:#{$1.strip}:#{$2.strip}:#{$3.strip}"
-      message = CombinationCommand.new(sender, $1.strip, $2.strip, $3.strip, sheet_manager).execute
-    when /\[재료뽑기\]/
-      cmd_key = :material
-      message = MaterialCommand.new(sender, sheet_manager).execute
     when /\[(\d+)D\]/i, /\[주사위\]/
       DiceCommand.run(mastodon_client, notification)
       return
