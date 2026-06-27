@@ -3,6 +3,7 @@
 
 class HomesteadCommand
   def initialize(content, student_id, sheet_manager)
+    @content = content
     @student_id = student_id.gsub('@', '')
     @sheet_manager = sheet_manager
   end
@@ -11,10 +12,10 @@ class HomesteadCommand
     content.match?(/\[은신처꾸미기\]/)
   end
 
-  def execute(content:, account:, status_id:)
-    return "먼저 등록해주세요." unless @sheet_manager.user_exists?(account)
+  def execute
+    return "먼저 등록해주세요." unless @sheet_manager.user_exists?(@student_id)
 
-    user_items = @sheet_manager.get_items(account)
+    user_items = @sheet_manager.get_items(@student_id)
     return "보유한 아이템이 없습니다." if user_items.empty?
 
     recipes = @sheet_manager.get_recipes
