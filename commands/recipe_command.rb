@@ -1,4 +1,6 @@
 # commands/recipe_command.rb
+# encoding: UTF-8
+
 class RecipeCommand
   def initialize(content, student_id, sheet_manager)
     @content = content
@@ -42,8 +44,6 @@ class RecipeCommand
     new_items = user_items.reject { |i| [@mat1, @mat2, @mat3].include?(i) }
     new_items << result_item
     @sheet_manager.set_items(account, new_items)
-
-    @sheet_manager.log(account, "조합", "#{@mat1}/#{@mat2}/#{@mat3} → #{result_item}")
 
     "재료를 사용하여 '#{result_item}'을(를) 획득했습니다."
   end
