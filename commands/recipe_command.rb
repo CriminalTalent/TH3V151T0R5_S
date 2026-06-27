@@ -19,15 +19,15 @@ class RecipeCommand
   end
 
   def execute
-    return "먼저 등록해주세요." unless @sheet_manager.user_exists?(@student_id)
-    return "조합 형식이 잘못되었습니다." unless @mat1 && @mat2 && @mat3
+    return "@#{@student_id} 먼저 등록해주세요." unless @sheet_manager.user_exists?(@student_id)
+    return "@#{@student_id} 조합 형식이 잘못되었습니다." unless @mat1 && @mat2 && @mat3
 
     user_items = @sheet_manager.get_items(@student_id)
     materials_needed = [@mat1, @mat2, @mat3].sort
     user_sorted = user_items.sort
 
     unless materials_needed.all? { |m| user_sorted.include?(m) }
-      return "필요한 재료가 부족합니다."
+      return "@#{@student_id} 필요한 재료가 부족합니다."
     end
 
     recipes = @sheet_manager.get_recipes
@@ -36,15 +36,15 @@ class RecipeCommand
       recipe_mats == materials_needed
     end
 
-    return "그 조합은 없습니다." unless recipe
+    return "@#{@student_id} 그 조합은 없습니다." unless recipe
 
     result_item = recipe[3].to_s.strip
-    return "조합 결과가 없습니다." if result_item.empty?
+    return "@#{@student_id} 조합 결과가 없습니다." if result_item.empty?
 
     new_items = user_items.reject { |i| [@mat1, @mat2, @mat3].include?(i) }
     new_items << result_item
     @sheet_manager.set_items(@student_id, new_items)
 
-    "재료를 사용하여 '#{result_item}'을(를) 획득했습니다."
+    "@#{@student_id} 재료를 사용하여 '#{result_item}'을(를) 획득했습니다."
   end
 end
