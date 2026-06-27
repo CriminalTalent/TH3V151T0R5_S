@@ -1,4 +1,6 @@
 # commands/homestead_command.rb
+# encoding: UTF-8
+
 class HomesteadCommand
   def initialize(content, student_id, sheet_manager)
     @student_id = student_id.gsub('@', '')
@@ -36,8 +38,6 @@ class HomesteadCommand
       mat1, mat2, mat3, result = combo[0].to_s.strip, combo[1].to_s.strip, combo[2].to_s.strip, combo[3].to_s.strip
       output += "\n[조합/#{mat1}/#{mat2}/#{mat3}] → #{result}"
     end
-
-    @sheet_manager.log(account, "은신처꾸미기", "조회")
 
     output
   end
