@@ -10,6 +10,7 @@ class SheetManager
   HOUSE_SHEET     = '기숙사'.freeze
   PROFESSOR_SHEET = '교수'.freeze
   AUTO_TOOT_SHEET = '자동툿'.freeze
+  RECIPE_SHEET    = '레시피'.freeze
 
   def initialize(service, sheet_id)
     @service  = service
@@ -95,6 +96,10 @@ class SheetManager
   rescue => e
     puts "[find_user 오류] #{e.message}"
     nil
+  end
+
+  def user_exists?(acct)
+    !!find_user(acct)
   end
 
   def update_user(acct, attrs)
@@ -183,6 +188,28 @@ class SheetManager
       }
     end
     nil
+  end
+
+  def get_items(acct)
+    user = find_user(acct)
+    return [] unless user
+    user[:items].to_s.split(',').map(&:strip).reject(&:empty?)
+  end
+
+  def set_items(acct, items_array)
+    update_user(acct, { items: items_array.join(',') })
+  end
+
+  # ──────────────────────────────────────────────
+  # 레시피 (재료 조합)
+  # ──────────────────────────────────────────────
+  def get_recipes
+    rows = read(RECIPE_SHEET, 'A:D')
+    return [] if rows.empty?
+    rows[1..].reject { |row| row.nil? || row[0].to_s.strip.empty? }
+  rescue => e
+    puts "[get_recipes 오류] #{e.message}"
+    []
   end
 
   # ──────────────────────────────────────────────
@@ -278,3 +305,5 @@ class SheetManager
       toot_count:    current_toot_count,
       toot_baseline: new_baseline
     })
+  end
+end
