@@ -26,8 +26,6 @@ class MaterialCommand
     items << material
     @sheet_manager.set_items(account, items)
 
-    @sheet_manager.log(account, "재료뽑기", material)
-
     "재료 '#{material}'을(를) 획득했습니다."
   end
 end
