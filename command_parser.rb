@@ -26,6 +26,7 @@ module CommandParser
     content_raw  = notification.dig('status', 'content') || ''
     sender       = notification.dig('account', 'acct') || ''
     content      = clean_html(content_raw)
+    puts "[DEBUG] cleaned content: #{content.inspect}"
     message  = nil
     cmd_key  = nil
 
