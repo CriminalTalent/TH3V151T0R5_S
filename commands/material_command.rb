@@ -1,4 +1,6 @@
 # commands/material_command.rb
+# encoding: UTF-8
+
 class MaterialCommand
   def initialize(content, student_id, sheet_manager)
     @student_id = student_id.gsub('@', '')
