@@ -18,11 +18,11 @@ class RecipeCommand
     content.match?(/\[조합\/(.+?)\/(.+?)\/(.+?)\]/)
   end
 
-  def execute(content:, account:, status_id:)
-    return "먼저 등록해주세요." unless @sheet_manager.user_exists?(account)
+  def execute
+    return "먼저 등록해주세요." unless @sheet_manager.user_exists?(@student_id)
     return "조합 형식이 잘못되었습니다." unless @mat1 && @mat2 && @mat3
 
-    user_items = @sheet_manager.get_items(account)
+    user_items = @sheet_manager.get_items(@student_id)
     materials_needed = [@mat1, @mat2, @mat3].sort
     user_sorted = user_items.sort
 
@@ -43,7 +43,7 @@ class RecipeCommand
 
     new_items = user_items.reject { |i| [@mat1, @mat2, @mat3].include?(i) }
     new_items << result_item
-    @sheet_manager.set_items(account, new_items)
+    @sheet_manager.set_items(@student_id, new_items)
 
     "재료를 사용하여 '#{result_item}'을(를) 획득했습니다."
   end
