@@ -2,7 +2,8 @@
 # encoding: UTF-8
 
 class EnrollCommand
-  INITIAL_CREDITS = 0
+  INITIAL_CREDITS     = 0
+  INITIAL_STAT_POINTS = 10
 
   def initialize(sheet_manager, mastodon_client, sender, name, status)
     @sheet_manager   = sheet_manager
@@ -22,21 +23,48 @@ class EnrollCommand
       return
     end
 
-    # A=ID / B=이름 / C=크레딧 / D=아이템 / E=기숙사
+    # 사용자 시트 등록
+    # A=ID / B=이름 / C=크레딧 / D=아이템 / E=메모
     # F=마지막베팅일 / G=오늘베팅횟수 / H=마지막타로일
     # I=누적툿수 / J=정산기준툿수 / K=스탯포인트잔여
-    # L=출석날짜 / M=과제날짜
     user_row = [
-      @sender, @name, INITIAL_CREDITS,
-      '', '', '', 0, '', 0, 0, 0, '', ''
+      @sender,
+      @name,
+      INITIAL_CREDITS,
+      '',
+      '',
+      '',
+      0,
+      '',
+      0,
+      0,
+      INITIAL_STAT_POINTS
     ]
     @sheet_manager.append('사용자', user_row)
 
-    stat_row = [@sender, @name, 50, 10, 10, 0, 0, 5]
+    # 스탯 시트 등록
+    # A=ID / B=이름 / C=기숙사 / D=패시브선택
+    # E=건강(현재건강, 50) / F=내구도(10) / G=마법능력(10)
+    # H=민첩(0) / I=기술(0) / J=행운(5) / K=최대건강(50)
+    stat_row = [
+      @sender,
+      @name,
+      '',
+      '',
+      50,
+      10,
+      10,
+      0,
+      0,
+      5,
+      50
+    ]
     @sheet_manager.append('스탯', stat_row)
 
     @mastodon_client.post_status(
-      "@#{@sender} 등록이 완료되었습니다.\n[소지품] 명령어로 현재 상태를 확인할 수 있습니다.",
+      "@#{@sender} 등록이 완료되었습니다.\n" \
+      "초기 스탯 포인트 #{INITIAL_STAT_POINTS}포인트가 지급되었습니다.\n" \
+      "[소지품] 명령어로 현재 상태를 확인할 수 있습니다.",
       reply_to_id: @status['id'],
       visibility: 'unlisted'
     )

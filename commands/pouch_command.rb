@@ -2,7 +2,7 @@
 # encoding: UTF-8
 
 class PouchCommand
-  MAX_CHARS = 450
+  BAR_WIDTH = 10
 
   def initialize(sender, sheet_manager, mastodon_client, notification)
     @sender          = sender.to_s.gsub('@', '')
@@ -13,12 +13,15 @@ class PouchCommand
 
   def execute
     status_id = @notification.dig('status', 'id')
-    user = @sheet_manager.find_user(@sender)
+
+    user  = @sheet_manager.find_user(@sender)
+    stats = @sheet_manager.find_stats(@sender)
 
     unless user
       @mastodon_client.post_status(
         "@#{@sender} 등록되지 않은 계정입니다.",
-        reply_to_id: status_id, visibility: 'unlisted'
+        reply_to_id: status_id,
+        visibility: 'unlisted'
       )
       return
     end
@@ -31,47 +34,40 @@ class PouchCommand
     lines << "#{user[:name]}의 소지품"
     lines << "──────────────────"
     lines << "크레딧: #{user[:credits]}C"
-    lines << ""
+
+    if stats
+      max_hp = stats[:health]
+      cur_hp = stats[:current_health]
+      lines << "건강: #{cur_hp}/#{max_hp}"
+      lines << "[#{health_bar(cur_hp, max_hp)}]"
+    end
+
     if items.any?
+      grouped = items.tally.map do |name, count|
+        count > 1 ? "#{name} x#{count}" : name
+      end
       lines << "[아이템]"
-      items.each { |it| lines << "- #{it}" }
+      lines << grouped.join(', ')
     else
       lines << "[아이템] 없음"
     end
+
     lines << "──────────────────"
 
-    full_text = lines.join("\n")
-
-    if full_text.length <= MAX_CHARS
-      @mastodon_client.post_status(full_text, reply_to_id: status_id, visibility: 'unlisted')
-    else
-      chunks = split_into_chunks(lines, MAX_CHARS)
-      reply_id = status_id
-      chunks.each do |chunk|
-        res = @mastodon_client.post_status(chunk, reply_to_id: reply_id, visibility: 'unlisted')
-        begin
-          reply_id = JSON.parse(res.body)['id'] if res
-        rescue
-        end
-        sleep 1
-      end
-    end
+    @mastodon_client.post_status(
+      lines.join("\n"),
+      reply_to_id: status_id,
+      visibility: 'unlisted'
+    )
   end
 
   private
 
-  def split_into_chunks(lines, max_chars)
-    chunks = []
-    current = []
-    lines.each do |line|
-      if (current.join("\n") + "\n" + line).length > max_chars
-        chunks << current.join("\n") unless current.empty?
-        current = [line]
-      else
-        current << line
-      end
-    end
-    chunks << current.join("\n") unless current.empty?
-    chunks
+  def health_bar(cur, max, width = BAR_WIDTH)
+    max = 1 if max.to_i <= 0
+    filled = ((cur.to_f / max) * width).round
+    filled = 0 if filled < 0
+    filled = width if filled > width
+    "█" * filled + "░" * (width - filled)
   end
 end
