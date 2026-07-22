@@ -54,7 +54,7 @@ module CommandParser
     when /\[소지품\]/
       PouchCommand.new(sender, sheet_manager, mastodon_client, notification).execute
       return
-    when /\[기부\/(\d+)\]/
+    when /\[기부\/(\d+)\](?:\/@.*)?/
       message = DonationCommand.new(sender, $1.to_i, sheet_manager).execute
     when /\[사용\/(.+?)\]/
       UseItemCommand.new(sender, $1.strip, sheet_manager, mastodon_client, notification).execute

@@ -12,6 +12,7 @@ class SheetManager
   PROFESSOR_SHEET = '교수'.freeze
   AUTO_TOOT_SHEET = '자동툿'.freeze
   RECIPE_SHEET    = '레시피'.freeze
+  LOG_SHEET       = '로그'.freeze
 
   MAX_RETRIES = 4
 
@@ -488,24 +489,28 @@ class SheetManager
   def add_house_credits(house_name, amount)
     rows = read(HOUSE_SHEET, 'A:B')
     normalized_house_name = house_name.to_s.strip
-
     rows[1..].to_a.each_with_index do |row, index|
       next unless row[0].to_s.strip == normalized_house_name
-
       current_score = (row[1] || 0).to_i
       new_score = current_score + amount.to_i
-
       success = write(
         HOUSE_SHEET,
         "B#{index + 2}",
         [[new_score]]
       )
-
       return false unless success
-
+      sleep 0.5
+      verify_rows = read(HOUSE_SHEET, 'A:B')
+      verify_rows[1..].to_a.each_with_index do |vrow, vidx|
+        if vrow[0].to_s.strip == normalized_house_name
+          verified_score = (vrow[1] || 0).to_i
+          log_house_score(normalized_house_name, amount, verified_score)
+          return verified_score
+        end
+      end
+      log_house_score(normalized_house_name, amount, new_score)
       return new_score
     end
-
     nil
   rescue => e
     puts "[add_house_credits 오류] #{e.message}"
@@ -723,5 +728,13 @@ class SheetManager
       return true
     end
     false
+  end
+def log_house_score(house_name, gained, final_score)
+    ws = read(LOG_SHEET, 'A:D')
+    row_num = ws.length + 1
+    now = Time.now.strftime('%Y-%m-%d %H:%M:%S')
+    write(LOG_SHEET, "A#{row_num}:D#{row_num}", [[now, house_name, "기숙사 점수 +#{gained}", "최종 #{final_score}점"]])
+  rescue => e
+    puts "[log_house_score 오류] #{e.message}"
   end
 end
