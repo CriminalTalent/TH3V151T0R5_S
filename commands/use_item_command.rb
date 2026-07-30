@@ -2,7 +2,7 @@
 # encoding: UTF-8
 class UseItemCommand
   WIGGENWELD_NAME = '위겐웰드물약'
-  WIGGENWELD_HEAL = 5
+  WIGGENWELD_HEAL = 10
   def initialize(sender, item_name, sheet_manager, mastodon_client, notification)
     @sender = sender.to_s.gsub('@', '')
     @item_name = item_name.to_s.strip
