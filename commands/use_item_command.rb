@@ -103,7 +103,7 @@ class UseItemCommand
   end
 
   def process_result(text, content)
-    url = content[%r{https?://\S+}]
+    url = content[%r{https?://[^\s\)\]（）】〉》]+}]
     media_ids = []
     if url
       begin
