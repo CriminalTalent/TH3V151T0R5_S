@@ -286,7 +286,7 @@ class MastodonClient
         "Content-Disposition: form-data; " \
         "name=\"description\"\r\n\r\n"
       )
-      body << safe_utf8(description)
+      body << safe_utf8(description).dup.force_encoding(Encoding::BINARY)
       body << "\r\n"
     end
 
