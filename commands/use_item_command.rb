@@ -83,9 +83,10 @@ class UseItemCommand
           @sheet_manager.update_user(@sender, { items: items.join(','), credits: new_credits })
           return safe_reply("@#{@sender} #{@item_name}을(를) 사용했습니다.\n크레딧: #{current_credits} → #{new_credits} (+#{gained_credits})")
         else
-          items << result
+          clean_name = extract_text(result)
+          items << clean_name
           @sheet_manager.update_user(@sender, { items: items.join(',') })
-          return process_result("@#{@sender} #{@item_name}을(를) 사용해 '#{extract_text(result)}'을(를) 획득했습니다.", result)
+          return process_result("@#{@sender} #{@item_name}을(를) 사용해 '#{clean_name}'을(를) 획득했습니다.", result)
         end
       else
         @sheet_manager.update_user(@sender, { items: items.join(',') })
