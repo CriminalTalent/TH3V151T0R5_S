@@ -136,11 +136,6 @@ class SheetManager
     update_user(acct, { items: items_array.join(',') })
   end
 
-  # 계정이 사용자 시트에 등록되어 있는지 여부만 확인한다.
-  def user_exists?(acct)
-    !!find_user(acct)
-  end
-
   def find_item(name)
     target = name.to_s.strip
     rows = read(ITEMS_SHEET, 'A:F')
@@ -300,13 +295,11 @@ class SheetManager
     end
     false
   end
-  HOUSE_LOG_SHEET = '기숙사로그'.freeze
-
-  def log_house_score(account, house_name, gained, final_score, source)
-    ws = read(HOUSE_LOG_SHEET, 'A:F')
+  def log_house_score(house_name, gained, final_score)
+    ws = read(LOG_SHEET, 'A:D')
     row_num = ws.length + 1
     now = Time.now.strftime('%Y-%m-%d %H:%M:%S')
-    write(HOUSE_LOG_SHEET, "A#{row_num}:F#{row_num}", [[now, account, house_name, gained.to_s, final_score.to_s, source]])
+    write(LOG_SHEET, "A#{row_num}:D#{row_num}", [[now, house_name, "기숙사 점수 +#{gained}", "최종 #{final_score}점"]])
   rescue => e
     puts "[log_house_score 오류] #{e.message}"
   end

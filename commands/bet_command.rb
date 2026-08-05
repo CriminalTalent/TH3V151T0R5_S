@@ -1,8 +1,6 @@
 # commands/bet_command.rb
 # encoding: UTF-8
-# 행운 스탯이 높을수록 유리한 배율 가중치 적용
 # 배율 범위: -5 ~ +5 (0 포함), 음수 가능
-
 class BetCommand
   MAX_BETS_PER_DAY = 3
 
@@ -15,7 +13,7 @@ class BetCommand
   def execute
     return "@#{@sender} 베팅 금액은 1 이상이어야 합니다." if @amount <= 0
 
-    user  = @sheet_manager.find_user(@sender)
+    user = @sheet_manager.find_user(@sender)
     return "@#{@sender} 등록되지 않은 계정입니다." unless user
 
     if user[:credits] < 0
@@ -33,12 +31,9 @@ class BetCommand
       return "@#{@sender} 오늘 베팅 횟수를 모두 사용했습니다. (#{MAX_BETS_PER_DAY}회/일)"
     end
 
-    # 행운 스탯 기반 가중치
-    # 행운이 높을수록 양수 배율에 더 많은 가중치
-    luck = (user_stats_luck(@sender) || 5).clamp(0, 30)
-    multiplier = weighted_multiplier(luck)
+    multiplier = rand(-5..5)
 
-    profit    = @amount * multiplier
+    profit = @amount * multiplier
     new_credits = user[:credits] + profit
 
     @sheet_manager.update_user(@sender, {
@@ -51,29 +46,5 @@ class BetCommand
     "@#{@sender} #{@amount}C 베팅 결과\n" \
     "배율: #{multiplier > 0 ? '+' : ''}#{multiplier}배 / 손익: #{sign}#{profit}C\n" \
     "잔여 크레딧: #{new_credits}C  (오늘 #{bet_count + 1}/#{MAX_BETS_PER_DAY}회)"
-  end
-
-  private
-
-  def user_stats_luck(acct)
-    stats = @sheet_manager.find_stats(acct)
-    stats ? stats[:luck] : 5
-  end
-
-  # 행운 0~30 → 배율 -5~+5 가중 샘플
-  # 행운이 낮을수록 음수 가중, 높을수록 양수 가중
-  def weighted_multiplier(luck)
-    pool = []
-    (-5..5).each do |m|
-      # 기본 가중치 1, 양수일수록 luck에 비례해 추가
-      weight = if m >= 0
-                 1 + (luck * m / 10.0).to_i
-               else
-                 1 + ((30 - luck) * m.abs / 10.0).to_i
-               end
-      weight = [weight, 1].max
-      weight.times { pool << m }
-    end
-    pool.sample
   end
 end

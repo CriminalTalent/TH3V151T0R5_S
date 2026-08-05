@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 # encoding: UTF-8
+STDOUT.sync = true
 
 require 'dotenv/load'
 require 'google/apis/sheets_v4'

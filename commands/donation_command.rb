@@ -25,6 +25,7 @@ class DonationCommand
       @sheet_manager.update_user(@sender, { credits: credits })
       return "@#{@sender} 기숙사 점수 반영 중 오류가 발생했습니다. 기숙사 탭의 기숙사명을 확인해주세요."
     end
+    @sheet_manager.log_house_score(@sender, house, "+#{@amount}", new_house_score, "[기부/#{@amount}]")
     "@#{@sender} [기부 완료]\n\n#{@amount}크레딧을 기부했습니다.\n\n#{house} 기숙사\n+#{@amount}점\n\n현재 #{house} 점수: #{new_house_score}점\n현재 보유 크레딧: #{new_credits}"
   rescue => e
     puts "[DonationCommand 오류] #{e.class}: #{e.message}"

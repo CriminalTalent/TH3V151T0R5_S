@@ -1,0 +1,44 @@
+  def add_creature_to_user(acct, creature_name)
+    acct = normalize_acct(acct)
+    user = find_user(acct)
+    return false unless user
+    creatures_str = user[:creatures]
+    creatures_map = {}
+    creatures_str.split(',').map(&:strip).reject(&:empty?).each do |entry|
+      if entry.include?(':')
+        name, count = entry.split(':', 2)
+        creatures_map[name.strip] = count.to_i
+      else
+        creatures_map[entry] = 1
+      end
+    end
+    if creatures_map[creature_name]
+      creatures_map[creature_name] += 1
+    else
+      creatures_map[creature_name] = 1
+    end
+    new_creatures = creatures_map.map { |k, v| "#{k}:#{v}" }.join(',')
+    update_user(acct, { creatures: new_creatures })
+  rescue => e
+    puts "[add_creature_to_user 오류] #{e.message}"
+    false
+  end
+
+  def get_user_creatures_with_count(acct)
+    acct = normalize_acct(acct)
+    user = find_user(acct)
+    return {} unless user
+    creatures_map = {}
+    user[:creatures].split(',').map(&:strip).reject(&:empty?).each do |entry|
+      if entry.include?(':')
+        name, count = entry.split(':', 2)
+        creatures_map[name.strip] = count.to_i
+      else
+        creatures_map[entry] = 1
+      end
+    end
+    creatures_map
+  rescue => e
+    puts "[get_user_creatures_with_count 오류] #{e.message}"
+    {}
+  end

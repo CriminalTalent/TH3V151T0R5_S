@@ -2,7 +2,7 @@
 # encoding: UTF-8
 
 class EnrollCommand
-  INITIAL_CREDITS     = 0
+  INITIAL_CREDITS     = 1000
   INITIAL_STAT_POINTS = 10
 
   def initialize(sheet_manager, mastodon_client, sender, name, status)
@@ -63,7 +63,7 @@ class EnrollCommand
 
     @mastodon_client.post_status(
       "@#{@sender} 등록이 완료되었습니다.\n" \
-      "초기 스탯 포인트 #{INITIAL_STAT_POINTS}포인트가 지급되었습니다.\n" \
+      "초기 크레딧 #{INITIAL_CREDITS}가 지급되었습니다.\n" \
       "[소지품] 명령어로 현재 상태를 확인할 수 있습니다.",
       reply_to_id: @status['id'],
       visibility: 'unlisted'

@@ -114,33 +114,6 @@ class SheetManager
     puts "[find_user 오류] #{e.message}"
     nil
   end
-  # 레시피 시트(A:D)를 2차원 배열로 반환한다. 헤더 행은 제외한다.
-  # 각 행은 [재료1, 재료2, 재료3, 결과물] 형태.
-  def get_recipes
-    rows = read(RECIPE_SHEET, 'A:D')
-    rows[1..].to_a.reject { |row| row.nil? || row[0].to_s.strip.empty? }
-  rescue => e
-    puts "[get_recipes 오류] #{e.message}"
-    []
-  end
-
-  # 사용자의 아이템 목록을 배열로 반환한다.
-  def get_items(acct)
-    user = find_user(acct)
-    return [] unless user
-    user[:items].to_s.split(',').map(&:strip).reject(&:empty?)
-  end
-
-  # 사용자의 아이템 목록(배열)을 쉼표구분 문자열로 저장한다.
-  def set_items(acct, items_array)
-    update_user(acct, { items: items_array.join(',') })
-  end
-
-  # 계정이 사용자 시트에 등록되어 있는지 여부만 확인한다.
-  def user_exists?(acct)
-    !!find_user(acct)
-  end
-
   def find_item(name)
     target = name.to_s.strip
     rows = read(ITEMS_SHEET, 'A:F')
@@ -300,13 +273,11 @@ class SheetManager
     end
     false
   end
-  HOUSE_LOG_SHEET = '기숙사로그'.freeze
-
-  def log_house_score(account, house_name, gained, final_score, source)
-    ws = read(HOUSE_LOG_SHEET, 'A:F')
+  def log_house_score(house_name, gained, final_score)
+    ws = read(LOG_SHEET, 'A:D')
     row_num = ws.length + 1
     now = Time.now.strftime('%Y-%m-%d %H:%M:%S')
-    write(HOUSE_LOG_SHEET, "A#{row_num}:F#{row_num}", [[now, account, house_name, gained.to_s, final_score.to_s, source]])
+    write(LOG_SHEET, "A#{row_num}:D#{row_num}", [[now, house_name, "기숙사 점수 +#{gained}", "최종 #{final_score}점"]])
   rescue => e
     puts "[log_house_score 오류] #{e.message}"
   end
