@@ -5,11 +5,13 @@ class TransferItemCommand
   def initialize(sender, target, item_name, sheet_manager)
     @sender        = normalize_acct(sender)
     @target        = normalize_acct(target)
-    @item_name     = item_name.to_s.strip
+    @item_names    = item_name.to_s.split(',').map(&:strip).reject(&:empty?)
     @sheet_manager = sheet_manager
   end
 
   def execute
+    return "@#{@sender} 양도할 아이템을 입력해주세요." if @item_names.empty?
+
     sender = @sheet_manager.find_user(@sender)
     return "@#{@sender} 등록되지 않은 계정입니다." unless sender
 
@@ -22,10 +24,12 @@ class TransferItemCommand
       .map(&:strip)
       .reject(&:empty?)
 
-    item_index = sender_items.index(@item_name)
-
-    unless item_index
-      return "@#{@sender} 소지하고 있지 않은 아이템입니다: #{@item_name}"
+    # 전부 소지하고 있는지 먼저 확인한다 (하나라도 없으면 아무것도 양도하지 않는다)
+    temp_items = sender_items.dup
+    @item_names.each do |name|
+      idx = temp_items.index(name)
+      return "@#{@sender} 소지하고 있지 않은 아이템입니다: #{name}" unless idx
+      temp_items.delete_at(idx)
     end
 
     target_items = target[:items]
@@ -34,8 +38,11 @@ class TransferItemCommand
       .map(&:strip)
       .reject(&:empty?)
 
-    sender_items.delete_at(item_index)
-    target_items << @item_name
+    @item_names.each do |name|
+      idx = sender_items.index(name)
+      sender_items.delete_at(idx)
+      target_items << name
+    end
 
     sender_updated = @sheet_manager.update_user(
       @sender,
@@ -53,17 +60,21 @@ class TransferItemCommand
 
     unless target_updated
       # 상대방 지급이 실패했을 경우 보내는 사람의 아이템을 복구한다.
-      sender_items << @item_name
+      restored_items = sender[:items]
+        .to_s
+        .split(',')
+        .map(&:strip)
+        .reject(&:empty?)
 
       restored = @sheet_manager.update_user(
         @sender,
-        items: sender_items.join(',')
+        items: restored_items.join(',')
       )
 
       unless restored
         puts(
           "[양도 심각 오류] 보내는 사람 복구 실패: " \
-          "@#{@sender} → @#{@target}, #{@item_name}"
+          "@#{@sender} → @#{@target}, #{@item_names.join(',')}"
         )
       end
 
@@ -73,9 +84,11 @@ class TransferItemCommand
       )
     end
 
-    puts "[양도] @#{@sender} → @#{@target} #{@item_name}"
+    puts "[양도] @#{@sender} → @#{@target} #{@item_names.join(',')}"
 
-    "@#{@sender} @#{@target} #{@item_name}을(를) " \
+    items_text = @item_names.join(', ')
+
+    "@#{@sender} @#{@target} #{items_text}을(를) " \
       "#{target[:name]}에게 양도했습니다."
   end
 
