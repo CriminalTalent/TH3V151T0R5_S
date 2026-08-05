@@ -163,20 +163,32 @@ class UseItemCommand
 
       if use_message && !use_message.strip.empty?
         candidates = use_message.split(',').map(&:strip).reject(&:empty?)
-        result = candidates.sample
 
-        credit_match = result.match(/^크레딧\+(\d+)$/)
-        if credit_match
-          gained = credit_match[1].to_i
-          credit_delta += gained
-          result_lines << "#{name}을(를) 사용했습니다. (크레딧 +#{gained})"
+        if candidates.length > 1
+          # 후보가 여러 개인 경우에만 랜덤 획득 → 소지품에 추가
+          result = candidates.sample
+          credit_match = result.match(/^크레딧\+(\d+)$/)
+          if credit_match
+            gained = credit_match[1].to_i
+            credit_delta += gained
+            result_lines << "#{name}을(를) 사용했습니다. (크레딧 +#{gained})"
+          else
+            clean_name = extract_text(result)
+            items << clean_name
+            result_lines << "#{name}을(를) 사용해 '#{clean_name}'을(를) 획득했습니다."
+            url = result[%r{https?://[^\s\)\]（）】〉》]+}]
+            if url
+              media_id = safe_upload(url, clean_name)
+              media_ids << media_id if media_id
+            end
+          end
         else
-          clean_name = extract_text(result)
-          items << clean_name
-          result_lines << "#{name}을(를) 사용해 '#{clean_name}'을(를) 획득했습니다."
-          url = result[%r{https?://[^\s\)\]（）】〉》]+}]
+          # 후보가 1개뿐이면 설명/플레이버 텍스트일 뿐, 소지품에 추가하지 않는다
+          clean_text = extract_text(use_message)
+          result_lines << clean_text
+          url = use_message[%r{https?://[^\s\)\]（）】〉》]+}]
           if url
-            media_id = safe_upload(url, clean_name)
+            media_id = safe_upload(url, name)
             media_ids << media_id if media_id
           end
         end
