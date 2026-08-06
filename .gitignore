@@ -16,3 +16,6 @@ last_mention_id.txt
 *_broken
 *_broken_*
 *_error_*.backup
+*.bak_*
+*.tmp
+*.before_*
