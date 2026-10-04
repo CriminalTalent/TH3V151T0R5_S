@@ -69,6 +69,7 @@ class UseItemCommand
     cur_hp = recipient_stats[:current_health]
     new_hp = [cur_hp + heal_amount, max_hp].min
     @sheet_manager.update_stat(recipient_id, '현재건강', new_hp)
+    clear_incapacitated_flag(recipient_id, new_hp)
 
     if @target
       safe_reply("@#{@sender} #{item_name}을(를) 사용해 @#{recipient_id}에게 사용했습니다.\n현재건강: #{cur_hp} → #{new_hp} (최대 #{max_hp})")
@@ -116,12 +117,17 @@ class UseItemCommand
 
     # 먼저 전부 소지 여부와 사용 가능 여부를 확인한다 (하나라도 실패하면 아무것도 사용하지 않는다)
     temp_items = items.dup
+    # 같은 아이템을 검증과 실제 처리 두 단계에서 각각 다시 조회하던 것을 방지하려고
+    # 여기서 한 번 찾은 아이템을 캐싱해둘고 아래 처리 루프에서 재사용한다.
+    # 시트를 1회만 읽어서 필요한 아이템 정보를 한 번에 가져온다
+    # (아이템 개수만큼 find_item을 반복 호출하면 API 타임아웃이 누적될 수 있음).
+    item_cache = @sheet_manager.find_items_bulk(item_names)
     item_names.each do |name|
       idx = temp_items.index(name)
       return safe_reply("@#{@sender} 소지하고 있지 않은 아이템입니다: #{name}") unless idx
       temp_items.delete_at(idx)
 
-      item = @sheet_manager.find_item(name)
+      item = item_cache[name]
       if item && !item[:usable]
         return safe_reply("@#{@sender} #{name}은(는) 사용할 수 없는 아이템입니다.")
       end
@@ -146,7 +152,7 @@ class UseItemCommand
       idx = items.index(name)
       next unless idx
 
-      item = @sheet_manager.find_item(name)
+      item = item_cache[name]
       normalized_name = name.gsub(' ', '')
       heal_amount = HEAL_ITEMS[normalized_name]
 
@@ -198,11 +204,14 @@ class UseItemCommand
     end
 
     if healed_any
-      recipient_stats = @sheet_manager.find_stats(recipient_id)
+      # @target이 있어 위 검증 단계에서 이미 조회했다면 그 값을 재사용하고,
+      # 없을 때(자기 자신에게 사용)만 새로 조회한다.
+      recipient_stats ||= @sheet_manager.find_stats(recipient_id)
       max_hp = recipient_stats[:health]
       cur_hp = recipient_stats[:current_health]
       new_hp = [cur_hp + hp_delta, max_hp].min
       @sheet_manager.update_stat(recipient_id, '현재건강', new_hp)
+      clear_incapacitated_flag(recipient_id, new_hp)
       result_lines << "현재건강: #{cur_hp} → #{new_hp} (최대 #{max_hp})"
     end
 
@@ -222,6 +231,32 @@ class UseItemCommand
 
     text = "#{header}\n" + result_lines.join("\n")
     safe_reply(text, media_ids.first(4))
+  end
+
+  # 회복으로 체력이 0 초과가 되면 조사상태 '전투불능' 플래그를 해제한다.
+  # 조사봇/전투봇과 같은 스프레드시트(GOOGLE_SHEET_ID = SCOUT_SHEET_ID)의
+  # '조사상태' 탭을 직접 읽고 쓴다. 헤더 위치가 바뀌어도 안전하도록
+  # 헤더명을 먼저 찾고, 못 찾으면 기존 컬럼 순서(A=ID, C=최근행동)로 폴백한다.
+  def clear_incapacitated_flag(acct, new_hp)
+    return if new_hp.to_i <= 0
+    acct = acct.to_s.gsub('@', '').strip
+    rows = @sheet_manager.read('조사상태', 'A:C')
+    return if rows.empty?
+
+    header = rows[0] || []
+    id_col     = header.index { |h| h.to_s.strip == 'ID' } || 0
+    action_col = header.index { |h| h.to_s.strip == '최근행동' } || 2
+    col_letter = ('A'.ord + action_col).chr
+
+    rows[1..].to_a.each_with_index do |row, i|
+      id = row[id_col].to_s.gsub('@', '').strip
+      next unless id == acct
+      next unless row[action_col].to_s.strip == '전투불능'
+      @sheet_manager.write('조사상태', "#{col_letter}#{i + 2}", [['']])
+      return
+    end
+  rescue => e
+    puts "[UseItem 전투불능 해제 오류] #{e.class}: #{e.message}"
   end
 
   def safe_upload(url, description)

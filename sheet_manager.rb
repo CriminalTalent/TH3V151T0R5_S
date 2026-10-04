@@ -162,6 +162,33 @@ class SheetManager
     nil
   end
 
+  # 여러 아이템명을 한 번에 찾는다. 시트를 1회만 읽어서 메모리 해시로
+  # 구성한 뒤 넘겨받은 이름들에 대해 조회한다 (find_item을 N번 호출할 때
+  # 생기는 반복 API 콜 및 타임아웃 누적을 방지).
+  def find_items_bulk(names)
+    targets = names.map { |n| n.to_s.strip }.uniq
+    result  = {}
+    rows = read(ITEMS_SHEET, 'A:F')
+    by_name = {}
+    rows[1..].to_a.each do |row|
+      next if row.nil? || row[0].nil?
+      key = row[0].to_s.strip
+      by_name[key] = {
+        name:        row[0].to_s.strip,
+        description: row[1].to_s,
+        price:       (row[2] || 0).to_i,
+        sellable:    truthy_cell?(row[3]),
+        usable:      truthy_cell?(row[4]),
+        use_message: row[5].to_s
+      }
+    end
+    targets.each { |t| result[t] = by_name[t] }
+    result
+  rescue => e
+    puts "[find_items_bulk 오류] #{e.message}"
+    {}
+  end
+
   def update_user(acct, attrs)
     acct = normalize_acct(acct)
     col_map = {
