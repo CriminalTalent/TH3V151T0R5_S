@@ -2,7 +2,7 @@
 # encoding: UTF-8
 
 class YnCommand
-  ANSWERS = ['YES', 'NO', 'Maybe', 'Why not?'].freeze
+  ANSWERS = ['YES', 'NO'].freeze
 
   def self.run(mastodon_client, notification)
     sender    = notification.dig('account', 'acct') || ''

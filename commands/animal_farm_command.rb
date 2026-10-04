@@ -1,14 +1,14 @@
 class AnimalFarmCommand
-  ANIMALS = ['🦊', '🐱', '🐯', '🐷', '🐼', '🐰', '🐬'].freeze
+  ANIMALS = ['🐱', '🐷', '🐰', '🐬'].freeze
   LUCKY = '✌'.freeze
   SYMBOLS = (ANIMALS + [LUCKY]).freeze
   DAILY_LIMIT = 3
   MULTIPLIERS = {
-    lucky_jackpot: 7.0,
-    four_match: 5.0,
-    three_match: 4.0,
-    two_pair: 2.0,
-    one_pair: 1.2,
+    lucky_jackpot: 10.0,
+    four_match: 6.0,
+    three_match: 5.0,
+    two_pair: 4.0,
+    one_pair: 3.0,
     none: 0.0
   }.freeze
 

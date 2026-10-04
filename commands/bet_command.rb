@@ -36,11 +36,15 @@ class BetCommand
     profit = @amount * multiplier
     new_credits = user[:credits] + profit
 
-    @sheet_manager.update_user(@sender, {
+    saved = @sheet_manager.update_user(@sender, {
       credits:         new_credits,
       last_bet_date:   today,
       today_bet_count: bet_count + 1
     })
+
+    unless saved
+      return "@#{@sender} 베팅 처리 중 시트 저장에 실패했습니다. 크레딧이 변경되지 않았을 수 있으니 [소지품]으로 확인 후 다시 시도해주세요."
+    end
 
     sign = profit >= 0 ? '+' : ''
     "@#{@sender} #{@amount}C 베팅 결과\n" \

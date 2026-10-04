@@ -18,6 +18,7 @@ require_relative 'commands/yn_command'
 require_relative 'commands/material_command'
 require_relative 'commands/homestead_command'
 require_relative 'commands/recipe_command'
+require_relative 'commands/available_recipe_command'
 require_relative 'commands/creature_command'
 require_relative 'commands/junk_command'
 require_relative 'commands/animal_farm_command'
@@ -77,6 +78,8 @@ module CommandParser
       message = MaterialCommand.new(content, sender, sheet_manager).execute
     when /\[은신처꾸미기\]/
       message = HomesteadCommand.new(content, sender, sheet_manager).execute
+    when /\[조합가능\]/
+      message = AvailableRecipeCommand.new(content, sender, sheet_manager).execute
     when /\[조합\/(.+?)\/(.+?)\/(.+?)\]/
       message = RecipeCommand.new(content, sender, sheet_manager).execute
     when /\[도감\]/, /\[도감\/(다음|이전)\]/
