@@ -9,6 +9,8 @@ class UseItemCommand
     '수상한영약'   => 50
   }
 
+  PHOENIX_TEAR = '불사조의눈물'
+
   def initialize(sender, item_name, sheet_manager, mastodon_client, notification, target: nil)
     @sender = sender.to_s.gsub('@', '')
     @item_name = item_name.to_s.strip
@@ -48,6 +50,10 @@ class UseItemCommand
     normalized_name = item_name.gsub(' ', '')
     heal_amount = HEAL_ITEMS[normalized_name]
 
+    if normalized_name == PHOENIX_TEAR
+      return use_phoenix_tear(items, idx, item_name)
+    end
+
     if heal_amount
       return use_heal_item(items, idx, item_name, heal_amount)
     end
@@ -76,6 +82,37 @@ class UseItemCommand
     else
       safe_reply("@#{@sender} #{item_name}을(를) 사용했습니다.\n현재건강: #{cur_hp} → #{new_hp} (최대 #{max_hp})")
     end
+  end
+
+  # 불사조의 눈물: 체력 0(행동불능)인 대상을 체력 1로 일으킨다.
+  # 체력이 0이 아니면 거절하고 아이템은 소모하지 않는다.
+  # (레이드 사용 불가는 코드로 막지 않고 아이템 설명으로만 안내)
+  def use_phoenix_tear(items, idx, item_name)
+    recipient_id = @target || @sender
+    recipient_stats = @sheet_manager.find_stats(recipient_id)
+    unless recipient_stats
+      return safe_reply("@#{@sender} 대상 계정(@#{recipient_id})이 등록되지 않았습니다.")
+    end
+
+    max_hp = recipient_stats[:health].to_i
+    cur_hp = recipient_stats[:current_health].to_i
+
+    unless cur_hp <= 0
+      return safe_reply("@#{@sender} #{item_name}은(는) 체력이 0(행동불능)인 대상에게만 사용할 수 있습니다. (@#{recipient_id} 현재건강: #{cur_hp})")
+    end
+
+    new_hp = 1
+    saved = @sheet_manager.update_stat(recipient_id, '현재건강', new_hp)
+    unless saved
+      return safe_reply("@#{@sender} 일시적인 오류로 사용하지 못했습니다. 아이템은 소모되지 않았으니 잠시 후 다시 시도해주세요.")
+    end
+
+    items.delete_at(idx)
+    @sheet_manager.update_user(@sender, { items: items.join(',') })
+    clear_incapacitated_flag(recipient_id, new_hp)
+
+    who = @target ? "@#{recipient_id}에게 " : ''
+    safe_reply("@#{@sender} #{item_name}을(를) #{who}사용했습니다. 행동불능에서 일어났습니다.\n현재건강: #{cur_hp} → #{new_hp} (최대 #{max_hp})")
   end
 
   def use_general_item(items, idx, item_name, item)
@@ -123,6 +160,9 @@ class UseItemCommand
     # (아이템 개수만큼 find_item을 반복 호출하면 API 타임아웃이 누적될 수 있음).
     item_cache = @sheet_manager.find_items_bulk(item_names)
     item_names.each do |name|
+      if name.gsub(' ', '') == PHOENIX_TEAR
+        return safe_reply("@#{@sender} #{name}은(는) 다른 아이템과 함께 사용할 수 없습니다. 단독으로 사용해주세요.")
+      end
       idx = temp_items.index(name)
       return safe_reply("@#{@sender} 소지하고 있지 않은 아이템입니다: #{name}") unless idx
       temp_items.delete_at(idx)
