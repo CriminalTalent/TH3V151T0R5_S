@@ -1,6 +1,7 @@
 class AnimalFarmCommand
   ANIMALS = ['🐱', '🐷', '🐰', '🐬'].freeze
   LUCKY = '✌'.freeze
+  LUCKY_RATE = 0.35 # 한 칸에 ✌가 나올 확률 (나머지는 동물 4종이 균등)
   SYMBOLS = (ANIMALS + [LUCKY]).freeze
   DAILY_LIMIT = 3
   MULTIPLIERS = {
@@ -80,7 +81,7 @@ class AnimalFarmCommand
   private
 
   def spin_slots
-    [SYMBOLS.sample, SYMBOLS.sample, SYMBOLS.sample, SYMBOLS.sample]
+    Array.new(4) { rand < LUCKY_RATE ? LUCKY : ANIMALS.sample }
   end
 
   def judge_result(slots)
