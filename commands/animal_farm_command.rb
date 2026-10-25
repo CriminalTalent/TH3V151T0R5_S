@@ -62,7 +62,7 @@ class AnimalFarmCommand
     slots = spin_slots
     result_type, multiplier = judge_result(slots)
 
-    payout = (amount * multiplier).to_i
+    payout = (amount * (multiplier * 10).round) / 10
     credit_change = payout - amount
     new_credits = current_credits + credit_change
 
