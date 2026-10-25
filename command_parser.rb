@@ -72,7 +72,7 @@ module CommandParser
       message = TarotCommand.new(sender, sheet_manager).execute
     when /\[베팅\/(\d+)\]/
       message = BetCommand.new(sender, $1.to_i, sheet_manager).execute
-    when /\[잡동사니\]/
+    when /\[잡동사니(?:\/\d+)?\]/
       message = JunkCommand.new(content, sender, sheet_manager).execute
     when /\[재료뽑기\]/
       message = MaterialCommand.new(content, sender, sheet_manager).execute
