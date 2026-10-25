@@ -94,7 +94,7 @@ class SheetManager
         row_num:         index + 2,
         id:              row[0].to_s.strip,
         name:            row[1].to_s.strip,
-        credits:         (row[2] || 0).to_i,
+        credits:         row[2].to_s.gsub(/[^\-0-9]/, '').to_i,
         items:           row[3].to_s,
         house:           house,
         memo:            row[4].to_s,
@@ -216,6 +216,8 @@ class SheetManager
     attrs.each do |key, value|
       col = col_map[key]
       next unless col
+      # 크레딧은 시트가 약 15자리까지만 정확히 저장하므로 문자열(텍스트 칸)로 쓴다.
+      value = value.to_i.to_s if key == :credits
       range_value_map["#{col}#{row_num}"] = [[value]]
     end
     range_value_map.each do |range, values|
